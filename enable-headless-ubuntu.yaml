@@ -1,0 +1,210 @@
+---
+
+- name: Connecting to Linux vm
+  hosts: all
+
+  vars_files:
+    - secret
+  vars:
+    # common variables definitions
+    TMPLT: "templates/"
+    KEY_FILE: "/etc/pki/tls/private/gnomerdp.key"
+    CERT_FILE: "/etc/pki/tls/certs/gnomerdp.crt"
+    CSR_FILE: "/etc/pki/tls/gnomerdp.csr"
+    GDM_SRC: "{{ TMPLT }}custom.conf"
+    GDM_DST: "/etc/gdm3/custom.conf"
+    MONITOR_SRC: "{{ TMPLT }}monitors.xml"
+    MONITOR_DST: "/home/{{ ansible_ssh_user }}/.config/monitors.xml"
+    ALLOW_LOCKED_RDP: "{{ TMPLT }}allowlockedremotedesktopkamens.us.v8.shell-extension.zip"
+    U_REMOTE_SVC: "u-remote-desktop.service"
+    U_REMOTE_SVC_DIR: "/etc/systemd/user"
+    U_REMOTE_SH_DIR: "/opt/bin"
+    U_REMOTE_SH: "remote-desktop.sh"
+     
+  tasks:
+    - name: Make sure OS is updated
+      timeout: 360
+      become: True
+      ansible.builtin.package:
+        upgrade: yes
+        update_cache: yes
+
+    - name: change password for {{ ansible_ssh_user }} user
+      become: True
+      ansible.builtin.user:
+        name: "{{ ansible_ssh_user }}"
+        state: present
+        password: "{{ ansible_sudo_pass | password_hash('sha512') }}"
+
+    # install ubuntu-desktop -->  graphical.target
+    - name: Make sure ubuntu-desktop is installed
+      become: True
+      ansible.builtin.package:
+        name:
+          - python3-psutil
+          - ubuntu-desktop
+      async: 1000
+      poll: 0
+      register: result_async
+
+    - name: Check async command
+      become: True
+      async_status: 
+        jid: "{{ result_async.ansible_job_id }}"
+      register: result
+      until: result.finished
+      retries: 70
+
+    - name: Create a directory if it does not exist
+      ansible.builtin.file:
+        path: /etc/pki/tls/private
+        state: directory
+        mode: '0751'
+      become: True
+
+    - name: Create a directory if it does not exist
+      ansible.builtin.file:
+        path: /etc/pki/tls/certs
+        state: directory
+        mode: '0751'
+      become: True
+
+    - name: Create a directory if it does not exist
+      ansible.builtin.file:
+        path: "/usr/share/gnome-shell/extensions/allowlockedremotedesktop@kamens.us"
+        state: directory
+        mode: '0751'
+      become: True
+
+    - name: Create private key (RSA, 2048 bits)
+      community.crypto.openssl_privatekey:
+        path: "{{ KEY_FILE }}"
+        format: pkcs8
+        size: 2048
+      become: True
+
+    - name: Create certificate signing request (CSR) for self-signed certificate
+      community.crypto.openssl_csr_pipe:
+        privatekey_path: "{{ KEY_FILE }}"
+        common_name: localhost
+      become: True
+      register: csr
+
+    - name: Create self-signed certificate from CSR
+      community.crypto.x509_certificate:
+        path: "{{ CERT_FILE }}"
+        csr_content: "{{ csr.csr }}"
+        privatekey_path: "{{ KEY_FILE }}"
+        provider: selfsigned
+      become: True
+
+    - name: Change private key ownership
+      ansible.builtin.file:
+        path: "{{ KEY_FILE }}"
+        owner: "{{ ansible_ssh_user }}"
+      become: True
+
+    # enable autologin
+    - name: copy /etc/gdm3/custom.conf
+      ansible.builtin.copy:
+        src: "{{ GDM_SRC }}"
+        dest: "{{ GDM_DST }}"
+        mode: '0644'
+      become: True
+    
+    # allowlockedremotedesktop 
+    - name: Unzip allowlockedremotedesktop@kamens.us Gnome Extension
+      become: True
+      ansible.builtin.unarchive:
+        src:  "{{ ALLOW_LOCKED_RDP }}"
+        dest: "/usr/share/gnome-shell/extensions/allowlockedremotedesktop@kamens.us"
+        mode: '0644'
+
+    - name: Enable allowlockedremotedesktop@kamens.us Gnome Extension
+      dconf:
+        key: "/org/gnome/shell/enabled-extensions"
+        value: "['allowlockedremotedesktop@kamens.us']"
+        state: present
+      register: enabled_extensions
+
+    - name: Create a directory for remote-desktop script
+      become: True
+      ansible.builtin.file:
+        path: "{{ U_REMOTE_SH_DIR}}"
+        state: directory
+        mode: '0755'
+
+    - name: Copy remote-desktop.sh script
+      become: True
+      ansible.builtin.copy:
+        src: "{{ TMPLT}}{{ U_REMOTE_SH }}"
+        dest: "{{ U_REMOTE_SH_DIR }}"
+        mode: '0755'
+ 
+    - name: copy u-remote-desktop.service service
+      become: True
+      ansible.builtin.copy:
+        src: "{{ TMPLT }}{{ U_REMOTE_SVC }}"
+        dest: "{{ U_REMOTE_SVC_DIR }}"
+        mode: '0644'
+ 
+    # - name: configure gnome rdp screen-share-mode as extend
+    #  ansible.builtin.command: "gsettings set org.gnome.desktop.remote-desktop.rdp screen-share-mode extend"
+
+    - name: configure gnome rdp screen-share-mode as extend
+      ansible.builtin.command: "gsettings set org.gnome.desktop.remote-desktop.rdp screen-share-mode mirror-primary"
+
+    - name: kill exiting gnome-keyring-daemon
+      ansible.builtin.command: "killall -q -u  {{ ansible_ssh_user }} gnome-keyring-daemon --wait"
+      ignore_errors: true # In case there is no process
+
+    - name: unlock/login gnome-keyring
+      ansible.builtin.command:
+        cmd: "/usr/bin/gnome-keyring-daemon --daemonize --login"
+        stdin: "{{ ansible_sudo_pass }}"
+        stdin_add_newline: no
+
+    - name: configure gnome remote service, rdp tls key
+      ansible.builtin.command: "grdctl rdp set-tls-key {{ KEY_FILE }}"
+
+    - name: configure gnome remote service, rdp tls cert
+      ansible.builtin.command: "grdctl rdp set-tls-cert {{ CERT_FILE }}"
+
+    - name: configure gnome remote service, rdp disable-view-only
+      ansible.builtin.command: "grdctl rdp disable-view-only"
+
+    - name: configure gnome remote service, rdp disable-view-only
+      ansible.builtin.command: "grdctl rdp set-credentials {{ ansible_ssh_user }} {{ ansible_sudo_pass }}"
+
+    - name: configure gnome remote service, rdp enable
+      ansible.builtin.command: "grdctl rdp enable"
+
+    - name: Run a u-remote-desktop service as user
+      ansible.builtin.systemd:
+        name: "{{ U_REMOTE_SVC }}"
+        state: started
+        scope: user
+        enabled: yes
+        daemon_reload: yes
+
+    - name: copy custom monitor.xml settings
+      become: True
+      ansible.builtin.copy:
+        src: "{{ MONITOR_SRC }}"
+        dest: "{{ MONITOR_DST }}"
+        mode: '0644'
+ 
+    - name: Reboot the oci machine
+      become: True
+      ansible.builtin.reboot:
+
+    - name: All Done
+      vars:
+        done: |
+              Now that the system has rebooted: 
+                ssh -L 3389:localhost:3389 {{ ansible_ssh_user }}@{{ ansible_host }}
+
+              Then connect via rdp on localhost:3389
+      debug:
+        msg: "{{ done.split('\n') }}"
+

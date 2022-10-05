@@ -1,0 +1,15 @@
+# /etc/systemd/user/u-remote-desktop.service
+# Enable as: systecmctl --user --now enable u-remote-desktop.service
+[Unit]
+Description=Run service as user 
+DefaultDependencies=no
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/bin/remote-desktop.sh
+TimeoutStartSec=0
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target

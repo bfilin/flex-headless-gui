@@ -1,0 +1,29 @@
+##########################################################
+# prep
+- Use flex-oci to create oci flex instance
+- place key.pem into ~/.ssh/key.pem
+- set ansible_host in host file to ip addr of oci instance
+    
+# setup
+ansible-playbook  -i host enable-headless-ubuntu.yaml --ask-vault-password
+Default password is: testing123
+
+# connect
+1) ssh -L 3389:localhost:3389 {{ ansible_ssh_user }}@{{ ansible_host }} 
+2) connect via rdp to localhost
+
+##########################################################
+
+
+may need to get:
+python3-paramiko 
+ansible-galaxy collection install community.general
+
+
+#########################################################
+
+To assign a new password to vault: 
+ansible-vault rekey secret
+
+To edit vault:
+ansible-vault edit secret
