@@ -5,4 +5,4 @@ all:
 
   hosts:
     headless-gui:
-      ansible_host: 132.145.146.54
+      ansible_host: <your oci ip>
