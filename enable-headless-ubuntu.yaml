@@ -15,7 +15,8 @@
     GDM_DST: "/etc/gdm3/custom.conf"
     MONITOR_SRC: "{{ TMPLT }}monitors.xml"
     MONITOR_DST: "/home/{{ ansible_ssh_user }}/.config/monitors.xml"
-    ALLOW_LOCKED_RDP: "{{ TMPLT }}allowlockedremotedesktopkamens.us.v8.shell-extension.zip"
+    ALLOW_LOCKED_RDP_ZIP: "allowlockedremotedesktopkamens.us.v8.shell-extension.zip"
+    ALLOW_LOCKED_RDP_UUID: "allowlockedremotedesktop@kamens.us"
     U_REMOTE_SVC: "u-remote-desktop.service"
     U_REMOTE_SVC_DIR: "/etc/systemd/user"
     U_REMOTE_SH_DIR: "/opt/bin"
@@ -58,26 +59,18 @@
       debug:
         msg: "{{ result_async }}"
 
-    - name: Create a directory if it does not exist
-      ansible.builtin.file:
-        path: /etc/pki/tls/private
-        state: directory
-        mode: '0751'
+    - name: create directory if they don't exist
       become: True
-
-    - name: Create a directory if it does not exist
       ansible.builtin.file:
-        path: /etc/pki/tls/certs
+        path: "{{ item }}"
         state: directory
+        owner: root
         mode: '0751'
-      become: True
-
-    - name: Create a directory if it does not exist
-      ansible.builtin.file:
-        path: "/usr/share/gnome-shell/extensions/allowlockedremotedesktop@kamens.us"
-        state: directory
-        mode: '0751'
-      become: True
+      loop:
+        - "/etc/pki/tls/certs"
+        - "/etc/pki/tls/private"  
+        - "/usr/share/gnome-shell/extensions/{{ ALLOW_LOCKED_RDP_UUID }}"
+        - "{{ U_REMOTE_SH_DIR }}"
 
     - name: Create private key (RSA, 2048 bits)
       community.crypto.openssl_privatekey:
@@ -119,23 +112,16 @@
     - name: Unzip allowlockedremotedesktop@kamens.us Gnome Extension
       become: True
       ansible.builtin.unarchive:
-        src:  "{{ ALLOW_LOCKED_RDP }}"
-        dest: "/usr/share/gnome-shell/extensions/allowlockedremotedesktop@kamens.us"
+        src:  "{{ TMPLT }}{{ ALLOW_LOCKED_RDP_ZIP }}"
+        dest: "/usr/share/gnome-shell/extensions/{{ ALLOW_LOCKED_RDP_UUID }}"
         mode: '0644'
 
-    - name: Enable allowlockedremotedesktop@kamens.us Gnome Extension
+    - name: Enable {{ ALLOW_LOCKED_RDP_UUID }} Gnome Extension
       dconf:
         key: "/org/gnome/shell/enabled-extensions"
-        value: "['allowlockedremotedesktop@kamens.us']"
+        value: "['{{ ALLOW_LOCKED_RDP_UUID }}']"
         state: present
       register: enabled_extensions
-
-    - name: Create a directory for remote-desktop script
-      become: True
-      ansible.builtin.file:
-        path: "{{ U_REMOTE_SH_DIR}}"
-        state: directory
-        mode: '0755'
 
     - name: Copy remote-desktop.sh script
       become: True
