@@ -1,3 +1,10 @@
+
+Enable rdp connection to in oci instance 
+
+Using
+Ubuntu 22.04.1 LTS 
+GNOME Shell 42.4
+
 ##########################################################
 # prep
 - Use flex-oci to create oci flex instance
