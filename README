@@ -2,7 +2,7 @@
 # prep
 - Use flex-oci to create oci flex instance
 - place key.pem into ~/.ssh/key.pem
-- set ansible_host in host file to ip addr of oci instance
+- set ansible_host in hosts file to ip addr of oci instance
     
 # setup
 ansible-playbook  -i host enable-headless-ubuntu.yaml --ask-vault-password
