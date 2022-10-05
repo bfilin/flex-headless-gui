@@ -10,7 +10,6 @@
     TMPLT: "templates/"
     KEY_FILE: "/etc/pki/tls/private/gnomerdp.key"
     CERT_FILE: "/etc/pki/tls/certs/gnomerdp.crt"
-    CSR_FILE: "/etc/pki/tls/gnomerdp.csr"
     GDM_SRC: "{{ TMPLT }}custom.conf"
     GDM_DST: "/etc/gdm3/custom.conf"
     MONITOR_SRC: "{{ TMPLT }}monitors.xml"
@@ -76,7 +75,7 @@
       community.crypto.openssl_privatekey:
         path: "{{ KEY_FILE }}"
         format: pkcs8
-        size: 2048
+        size: 2048 # 4096
       become: True
 
     - name: Create certificate signing request (CSR) for self-signed certificate
