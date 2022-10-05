@@ -22,13 +22,6 @@
     U_REMOTE_SH: "remote-desktop.sh"
      
   tasks:
-    - name: Make sure OS is updated
-      timeout: 360
-      become: True
-      ansible.builtin.package:
-        upgrade: yes
-        update_cache: yes
-
     - name: change password for {{ ansible_ssh_user }} user
       become: True
       ansible.builtin.user:
@@ -36,24 +29,34 @@
         state: present
         password: "{{ ansible_sudo_pass | password_hash('sha512') }}"
 
+    - name: Make sure OS is updated - this process can take a long time
+      # timeout: 360
+      become: True
+      ansible.builtin.package:
+        upgrade: yes
+        update_cache: yes
+      async: 1000
+      poll: 10
+      register: result_async
+
+    - name: OS update result
+      debug:
+        msg: "{{ result_async }}"
+
     # install ubuntu-desktop -->  graphical.target
-    - name: Make sure ubuntu-desktop is installed
+    - name: install ubuntu-desktop - please be patient this may take longer time to complete
       become: True
       ansible.builtin.package:
         name:
           - python3-psutil
           - ubuntu-desktop
-      async: 1000
-      poll: 0
+      async: 2000
+      poll: 20
       register: result_async
 
-    - name: Check async command
-      become: True
-      async_status: 
-        jid: "{{ result_async.ansible_job_id }}"
-      register: result
-      until: result.finished
-      retries: 70
+    - name: ubuntu-desktop installation result
+      debug:
+        msg: "{{ result_async }}"
 
     - name: Create a directory if it does not exist
       ansible.builtin.file:

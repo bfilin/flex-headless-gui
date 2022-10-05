@@ -12,7 +12,7 @@ GNOME Shell 42.4
 - set ansible_host in hosts file to ip addr of oci instance
     
 # setup
-ansible-playbook  -i host enable-headless-ubuntu.yaml --ask-vault-password
+ansible-playbook  -i hosts enable-headless-ubuntu.yaml --ask-vault-password
 Default password is: testing123
 
 # connect
@@ -21,11 +21,11 @@ Default password is: testing123
 
 ##########################################################
 
+May need to install: community.general collection, as specified in requirements.yaml
+ansible-galaxy install -r requirements.yml
 
-may need to get:
-python3-paramiko 
-ansible-galaxy collection install community.general
-
+Also may need to install: python3-paramiko 
+specific to your system
 
 #########################################################
 
@@ -34,3 +34,5 @@ ansible-vault rekey secret
 
 To edit vault:
 ansible-vault edit secret
+
+
